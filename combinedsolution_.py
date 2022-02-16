@@ -1062,6 +1062,7 @@ def plot_menu(plot,problem1_id):
         '2':for Pe VS Pu transmition power and noise variance.
         '3':for Pe Vs number of SU
         '4':for Time comlexity DNN vs Numerical
+        '5': for the correletion vs pe
     problem1_id : str
         DNN model id.
 
@@ -1081,7 +1082,7 @@ def plot_menu(plot,problem1_id):
         plot_Pe_Vs_SU(problem1_id)
     if plot == '4':
         plot_Time_complexity(problem1_id)
-    if plot == '5':
+    if plot== '5':
         correlation_vs_pe(problem1_id)
         
             
