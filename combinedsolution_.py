@@ -24,7 +24,7 @@ d_ref = 10.0 # reference distance
 sh_sigma = 7.9 # shadow fading constant   (wslee paper)
 p_t_dB = 10.0 # tx power - 23dBm
 p_t = 10*(p_t_dB/10)
-sigma_v = 1 # noice variance
+sigma_v = 1 # noise variance
 
 #DNN data
 alpha = 0.0001
@@ -385,16 +385,16 @@ class BivariateDNNModel(DNNModel):
               snrs_s = snrs[count,:]
               C = tf.linalg.tensor_diag(1+2*snrs_s)
               val = predicted_threshold[count]
-              diag_exp1 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,tf.ones([10,batch_s])))
-              test = fs*(T_cte - 10* tr)*diag_exp1
+              diag_exp1 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,tf.ones([num_sens,batch_s])))
+              test = fs*(T_cte - num_sens* tr)*diag_exp1
               exp1 = predicted_threshold[count]-test
               diag_exp2=  tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,tf.keras.backend.transpose(predicted_weights)))
-              exp2 = tf.math.sqrt(2*fs*(T_cte - 10* tr)* diag_exp2)
+              exp2 = tf.math.sqrt(2*fs*(T_cte - num_sens* tr)* diag_exp2)
               p_0 = cls.Q(exp1/exp2)
-              diag_exp3 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,(0.3*tf.keras.backend.transpose(gain_bis)+tf.ones([10,batch_s]))))
-              exp3 = predicted_threshold[count]- (fs*(T_cte - 10* tr))* diag_exp3
+              diag_exp3 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,(0.3*tf.keras.backend.transpose(gain_bis)+tf.ones([num_sens,batch_s]))))
+              exp3 = predicted_threshold[count]- (fs*(T_cte - num_sens* tr))* diag_exp3
               diag_exp4 = tf.linalg.diag_part(tf.linalg.matmul(tf.linalg.matmul(predicted_weights,C),tf.keras.backend.transpose(predicted_weights)))
-              exp4 = tf.math.sqrt(2*fs*(T_cte - 10* tr)*diag_exp4)
+              exp4 = tf.math.sqrt(2*fs*(T_cte - num_sens* tr)*diag_exp4)
               p_1 = (1-cls.Q(exp3/exp4))
               Pf = cls.Q(exp1/exp2)
               Pf = tf.reduce_mean(tf.reduce_mean(Pf)) 
@@ -793,7 +793,7 @@ def plot_mininumPd_Vs_SU(problem1_id):
             with open('trainData'+file_id+'.data', 'rb') as filehandle:
                 output_train = pickle.load(filehandle)
         else:
-            output_train = generate_data('2',str(num_sens))
+            output_train = generate_data('2',num_sens)
         run_model(output_train,problem1_id)
         pd.append(min(pd_values))
     
@@ -832,19 +832,20 @@ def plot_Pe_Vs_Putx_sigma(problem1_id):
     global sigma_v
     sigma = [15,10,5]
     p_t_dB = [10,15,20,25,30,35,40]
+    p_t= [10*(x/10) for x in p_t_dB]
     num_sens = 10
     plots = dict()
     for sig in sigma:
         sigma_v = sig
         for tx in p_t_dB:
-            p_t= 10*(p_t_dB/10)
+            
             if os.path.isfile('trainData'+str(num_sens)+'.data'):
                 with open('trainData'+str(num_sens)+'.data', 'rb') as filehandle:
                     output_train = pickle.load(filehandle)
             else:
-                output_train = generate_data('2',str(num_sens))
+                output_train = generate_data('2',num_sens)
             run_model(output_train,problem1_id)
-            plots[sig].append(max(Pe_values))
+            plots[sig].append(mean(Pe_values))
     barWidth = 0.5 
     plt.figure(2)
     ax = plt.axes()
@@ -855,7 +856,7 @@ def plot_Pe_Vs_Putx_sigma(problem1_id):
     ax.grid(False)
     plt.legend()
     ax.set_xlabel('Transmit Power')
-    ax.set_ylabel('Maximum Pe') 
+    ax.set_ylabel('average Pe') 
     plt.savefig('PeVSPUp metric .pdf')
     plt.close()            
         
@@ -904,6 +905,54 @@ def plot_Pe_Vs_SU(problem1_id):
     plt.show()  
     plt.savefig('Pe metric .pdf')
     plt.close()
+    
+def correlation_vs_pe(problem1_id):
+    """
+    this function plots the pe variantion depending on the correlation coef
+
+    Parameters
+    ----------
+    problem1_id : str
+       the dnn model id 
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    global d_ref
+    avg_pe = []
+    ref= [5,10,15,20,25,30,35,40,45,50]
+    
+    for x in ref:
+        d_ref = x
+        if os.path.isfile('trainData'+str(num_sens)+'.data'):
+            with open('trainData'+str(num_sens)+'.data', 'rb') as filehandle:
+                output_train = pickle.load(filehandle)
+        else:
+            output_train = generate_data('2',num_sens)
+        run_model(output_train,problem1_id)
+        avg_pe.append(mean(Pe_values))
+    plt.figure(2)
+    ax = plt.axes()
+    ax.plot(ref,avg_pe, linestyle= 'dashdot', marker='+', color='red')
+    ax.margins(x=0,y=0)
+    ax.grid(False)    
+    ax.set_xlabel('Correlation Reference Distance')
+    ax.set_ylabel('The average (Pe)')
+    plt.grid(zorder=0,linestyle='dotted')
+    #plt.show()  
+    plt.savefig('PeVSdRef metric .pdf')
+    plt.close()
+            
+    
+    
+    
+    
+    
+    
+    
 
 def Time_complexity_Vs_SU_DNN(problem1_id):
     global num_sens
@@ -916,7 +965,7 @@ def Time_complexity_Vs_SU_DNN(problem1_id):
             with open('trainData'+file_id+'.data', 'rb') as filehandle:
                 output_train = pickle.load(filehandle)
         else:
-            output_train = generate_data('2',str(num_sens))
+            output_train = generate_data('2',num_sens)
 
         snrs_train = scaling_data(output_train)
         signal_gain= np.array(output_train['gain'])
@@ -942,10 +991,11 @@ def Time_complexity_Vs_SU_Numerical():
             with open('trainData'+file_id+'.data', 'rb') as filehandle:
                 output_train = pickle.load(filehandle)
         else:
-            output_train = generate_data('2',str(num_sens)) 
+            output_train = generate_data('2',num_sens) 
         snrs_test = scaling_data(output_train)
         start = time.time()
-        SpectrumSensing.generate_thresholds(snrs_test)
+        spectrum_sensing = SpectrumSensing()
+        spectrum_sensing.generate_thresholds(snrs_test)
         time_complexity.append(time.time() - start)
     
     return time_complexity
@@ -1031,6 +1081,9 @@ def plot_menu(plot,problem1_id):
         plot_Pe_Vs_SU(problem1_id)
     if plot == '4':
         plot_Time_complexity(problem1_id)
+    if plot == '5':
+        correlation_vs_pe(problem1_id)
+        
             
             
             
@@ -1048,8 +1101,11 @@ def main():
     print("press 2 for Pe VS Pu transmition power and noise variance\n")
     print("press 3 for Pe Vs number of SU\n")
     print("press 4 for Time comlexity DNN vs Numerical\n")
+    print("press 5 for Pe VS correlation coef\n")
+    
     plot = input("press your choice: ") 
     plot_menu(plot,problem1_id)
+    
         
 
 
