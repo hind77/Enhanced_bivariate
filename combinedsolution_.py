@@ -30,7 +30,7 @@ sigma_v = 1 # noise variance
 alpha = 0.0001
 batch_s = 512
 batch_id = batch_s
-num_sens = 5 
+num_sens = 10 
 samples_factor = 100
 num_samples = batch_s*samples_factor
 
@@ -387,10 +387,14 @@ class BivariateDNNModel(DNNModel):
               val = predicted_threshold[count]
               diag_exp1 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,tf.ones([num_sens,batch_s])))
               test = fs*(T_cte - num_sens* tr)*diag_exp1
+              #tf.print("test",test)
               exp1 = predicted_threshold[count]-test
+              #tf.print("exp1",exp1)
               diag_exp2=  tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,tf.keras.backend.transpose(predicted_weights)))
               exp2 = tf.math.sqrt(2*fs*(T_cte - num_sens* tr)* diag_exp2)
+             # tf.print("exp2",exp2)
               p_0 = cls.Q(exp1/exp2)
+              #tf.print("po",p_0)
               diag_exp3 = tf.linalg.diag_part(tf.linalg.matmul(predicted_weights,(0.3*tf.keras.backend.transpose(gain_bis)+tf.ones([num_sens,batch_s]))))
               exp3 = predicted_threshold[count]- (fs*(T_cte - num_sens* tr))* diag_exp3
               diag_exp4 = tf.linalg.diag_part(tf.linalg.matmul(tf.linalg.matmul(predicted_weights,C),tf.keras.backend.transpose(predicted_weights)))
@@ -398,6 +402,7 @@ class BivariateDNNModel(DNNModel):
               p_1 = (1-cls.Q(exp3/exp4))
               Pf = cls.Q(exp1/exp2)
               Pf = tf.reduce_mean(tf.reduce_mean(Pf)) 
+              #print("pf",Pf)
               if not Pf< pf_threshold:
                   Pf_penality = 0.0
               else:
@@ -410,6 +415,7 @@ class BivariateDNNModel(DNNModel):
                   Pd_penality = tf.math.pow((Pd-pd_threshold),2) 
               weight_penality = tf.math.pow((tf.norm(predicted_weights)-1),2) 
               Pe = pi_0*Pf+ pi_1*(1 - Pd)
+              #tf.print("pe",Pe)
               loss = Pe + alpha*(Pd_penality + Pf_penality + weight_penality)
               loss = tf.reduce_mean(tf.reduce_mean(loss))# remove 
               loss_values.append(loss)
@@ -421,7 +427,8 @@ class BivariateDNNModel(DNNModel):
               pf_values.append(Pf.numpy())
               pd_values.append(Pd.numpy())
               Pe_values.append(tf.reduce_mean(pe_values).numpy())
-          counter = counter + 1       
+          counter = counter + 1 
+          #tf.print("pe",tf.reduce_mean(loss_values))
           return tf.reduce_mean(loss_values)
 
         return bivariate_loss
@@ -767,7 +774,7 @@ def generate_data(choice,SU_N):
          
      return output_train
  
-def plot_mininumPd_Vs_SU(problem1_id):
+def plot_averagePe_Vs_SU(problem1_id):
     """
     this function plot the minimum probability of detection 
     using different number of SU configurations
@@ -785,8 +792,8 @@ def plot_mininumPd_Vs_SU(problem1_id):
     """
     global num_sens
     pd = []
-    num_sens = [5,10,15,20,25,30,35,40,45,50]
-    for su in num_sens:
+    x = [5,10,15,20,25,30,35,40,45,50]
+    for su in x:
         num_sens = su
         file_id = str(num_sens)
         if os.path.isfile('trainData'+file_id+'.data'):
@@ -795,16 +802,15 @@ def plot_mininumPd_Vs_SU(problem1_id):
         else:
             output_train = generate_data('2',num_sens)
         run_model(output_train,problem1_id)
-        pd.append(min(pd_values))
-    
-    x = [5,10,15,20,25,30,35,40,45,50]
+        pd.append(mean(pd_values))
+
     plt.figure(2)
     ax = plt.axes()
     ax.plot(x,pd, linestyle= 'dashdot', marker='+', color='blue')
     ax.margins(x=0,y=0)
     ax.grid(False)   
     ax.set_xlabel('Number of SUs')
-    ax.set_ylabel('The minimum (Pd)')
+    ax.set_ylabel('(Pd)')
     plt.grid(zorder=0,linestyle='dotted') 
     plt.savefig('PdVSSUs metric .pdf')
     plt.close()
@@ -828,18 +834,17 @@ def plot_Pe_Vs_Putx_sigma(problem1_id):
     """
     global p_t_dB 
     global p_t 
-    global num_sens
     global sigma_v
     sigma = [15,10,5]
     p_t_dB = [10,15,20,25,30,35,40]
     p_t= [10*(x/10) for x in p_t_dB]
-    num_sens = 10
     plots = dict()
     for sig in sigma:
         sigma_v = sig
         for tx in p_t_dB:
-            
-            if os.path.isfile('trainData'+str(num_sens)+'.data'):
+            file_id = str(num_sens)
+            print(num_sens)
+            if os.path.isfile('trainData'+file_id+'.data'):
                 with open('trainData'+str(num_sens)+'.data', 'rb') as filehandle:
                     output_train = pickle.load(filehandle)
             else:
@@ -880,8 +885,8 @@ def plot_Pe_Vs_SU(problem1_id):
     """
     global num_sens
     pe = dict()
-    num_sens = [10,20,30]
-    for su in num_sens:
+    x = [10,20,30]
+    for su in x:
         num_sens = su
         file_id = str(num_sens)
         if os.path.isfile('trainData'+file_id+'.data'):
@@ -890,7 +895,7 @@ def plot_Pe_Vs_SU(problem1_id):
         else:
             output_train = generate_data('2',num_sens)
         run_model(output_train,problem1_id)
-        pe[num_sens].append(max(Pe_values))
+        #pe[num_sens].append(mean(Pe_values))
 
     plt.figure(2)
     ax = plt.axes()
@@ -1021,9 +1026,9 @@ def plot_Time_complexity(problem1_id):
     barWidth = 0.25
     fig = plt.subplots(figsize =(12, 8))
      
-    # set height of bar
-    numerical = Time_complexity_Vs_SU_Numerical()
     dnn = Time_complexity_Vs_SU_DNN(problem1_id)
+    numerical = Time_complexity_Vs_SU_Numerical()
+    
     
      
     # Set position of bar on X axis
@@ -1051,39 +1056,39 @@ def plot_Time_complexity(problem1_id):
     
     
 
-def plot_menu(plot,problem1_id):
-    """
-    This is the menu function for the plotting choice
+# def plot_menu(plot,problem1_id):
+#     """
+#     This is the menu function for the plotting choice
 
-    Parameters
-    ----------
-    plot : str
-        '1':for minimum Pd Vs number of SU.
-        '2':for Pe VS Pu transmition power and noise variance.
-        '3':for Pe Vs number of SU
-        '4':for Time comlexity DNN vs Numerical
-        '5': for the correletion vs pe
-    problem1_id : str
-        DNN model id.
+#     Parameters
+#     ----------
+#     plot : str
+#         '1':for minimum Pd Vs number of SU.
+#         '2':for Pe VS Pu transmition power and noise variance.
+#         '3':for Pe Vs number of SU
+#         '4':for Time comlexity DNN vs Numerical
+#         '5': for the correletion vs pe
+#     problem1_id : str
+#         DNN model id.
 
-    Returns
-    -------
-    None.
+#     Returns
+#     -------
+#     None.
 
-    """
+#     """
     
 
 
-    if plot == '1':
-        plot_mininumPd_Vs_SU(problem1_id)
-    if plot == '2':
-        plot_Pe_Vs_Putx_sigma(problem1_id)
-    if plot == '3':
-        plot_Pe_Vs_SU(problem1_id)
-    if plot == '4':
-        plot_Time_complexity(problem1_id)
-    if plot== '5':
-        correlation_vs_pe(problem1_id)
+#     if plot == '1':
+#         plot_mininumPd_Vs_SU(problem1_id)
+#     if plot == '2':
+#         plot_Pe_Vs_Putx_sigma(problem1_id)
+#     if plot == '3':
+#         plot_Pe_Vs_SU(problem1_id)
+#     if plot == '4':
+#         plot_Time_complexity(problem1_id)
+#     if plot== '5':
+#         correlation_vs_pe(problem1_id)
         
             
             
@@ -1097,15 +1102,23 @@ def main():
     
     
     problem1_id = 'bivariate_problem'
-    print("Please define  your plot choice\n")
-    print("press 1 for minimum Pd Vs number of SU\n")
-    print("press 2 for Pe VS Pu transmition power and noise variance\n")
-    print("press 3 for Pe Vs number of SU\n")
-    print("press 4 for Time comlexity DNN vs Numerical\n")
-    print("press 5 for Pe VS correlation coef\n")
+    # print("Please define  your plot choice\n")
+    # print("press 1 for minimum Pd Vs number of SU\n")
+    # print("press 2 for Pe VS Pu transmition power and noise variance\n")
+    # print("press 3 for Pe Vs number of SU\n")
+    # print("press 4 for Time comlexity DNN vs Numerical\n")
+    # print("press 5 for Pe VS correlation coef\n")
     
-    plot = input("press your choice: ") 
-    plot_menu(plot,problem1_id)
+    # plot = input("press your choice: ") 
+    # plot_menu(plot,problem1_id)
+
+    plot_Pe_Vs_SU(problem1_id)
+    plot_Pe_Vs_Putx_sigma(problem1_id)
+    plot_averagePe_Vs_SU(problem1_id)    
+    correlation_vs_pe(problem1_id)
+    plot_Time_complexity(problem1_id)
+    
+    
     
         
 
